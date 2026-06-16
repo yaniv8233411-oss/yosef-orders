@@ -5,47 +5,76 @@
 <title>תחנת הדפסה - יוסף הדייג</title>
 <script src="https://cdn.jsdelivr.net/npm/qz-tray@2.2.4/qz-tray.js"></script>
 <style>
-body{font-family:Arial;background:#f5fbfc;margin:0;color:#123}.head{background:#0b6f83;color:white;padding:18px;text-align:center}.wrap{max-width:900px;margin:auto;padding:16px}.card{background:white;border-radius:18px;padding:16px;margin:12px 0;box-shadow:0 4px 18px #0001}button{border:0;border-radius:12px;background:#0b8aa0;color:white;font-weight:bold;padding:12px 18px;margin:5px;font-size:16px}.bad{color:#b00020}.ok{color:#078a34}.row{border-top:1px solid #ddd;padding:12px 0;line-height:1.5}input{font-size:16px;padding:8px;border-radius:8px;border:1px solid #ccc}
+body{font-family:Arial;background:#f5fbfc;margin:0;color:#123}.head{background:#0b6f83;color:white;padding:18px;text-align:center}.wrap{max-width:900px;margin:auto;padding:16px}.card{background:white;border-radius:18px;padding:16px;margin:12px 0;box-shadow:0 4px 18px #0001}button{border:0;border-radius:12px;background:#0b8aa0;color:white;font-weight:bold;padding:12px 18px;margin:5px;font-size:16px}.bad{color:#b00020}.ok{color:#078a34}.row{border-top:1px solid #ddd;padding:12px 0;line-height:1.5}input{font-size:16px;padding:8px;border-radius:8px;border:1px solid #ccc}.muted{color:#789;font-size:14px}
 </style>
 </head>
 <body>
-<div class="head"><h1>תחנת הדפסה - יוסף הדייג v1.8</h1><div>השאר דף זה פתוח בקופה · QZ Tray חייב להיות פתוח</div></div>
+<div class="head"><h1>תחנת הדפסה - יוסף הדייג v1.9</h1><div>השאר דף זה פתוח בקופה · QZ Tray חייב להיות פתוח</div></div>
 <div class="wrap">
-  <div class="card"><button id="connectBtn">חבר QZ</button><button id="refreshBtn">רענן</button><button id="testBtn">בדיקת הדפסה</button><div id="status">בודק...</div><div>מדפסת: <input id="printer" value="POS80"></div></div>
+  <div class="card"><button id="connectBtn">חבר QZ</button><button id="refreshBtn">רענן</button><button id="testBtn">בדיקת הדפסה</button><button id="resetBtn">אפס הדפסות מקומיות</button><div id="status">בודק...</div><div>מדפסת: <input id="printer" value="POS80"></div><div class="muted">v1.9 מדפיס עברית כ-HTML דרך דרייבר המדפסת כדי למנוע ג׳יבריש.</div></div>
   <div class="card"><h2>הזמנות</h2><div id="ordersBox"></div></div>
 </div>
-<audio id="beep"><source src="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA="></audio>
 <script>
 const $=(id)=>document.getElementById(id);
-let printed=new Set(JSON.parse(localStorage.getItem('printedIds')||'[]'));
+let printed=new Set(JSON.parse(localStorage.getItem('printedIds_v19')||'[]'));
+function esc(s){return String(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m])).replace(/\n/g,'<br>')}
+function beep(){ try{ const ac=new (window.AudioContext||window.webkitAudioContext)(); const o=ac.createOscillator(); const g=ac.createGain(); o.frequency.value=880; o.connect(g); g.connect(ac.destination); g.gain.setValueAtTime(0.15,ac.currentTime); o.start(); setTimeout(()=>{o.stop(); ac.close();},350); }catch(e){} }
 async function connectQZ(){
   try{ if(!qz.websocket.isActive()) await qz.websocket.connect(); $('status').innerHTML='<span class="ok">QZ מחובר</span>'; return true; }
-  catch(e){ $('status').innerHTML='<span class="bad">QZ לא מחובר: '+e.message+'</span>'; return false; }
+  catch(e){ $('status').innerHTML='<span class="bad">QZ לא מחובר: '+esc(e.message)+'</span>'; return false; }
 }
-function receiptText(o){return [`יוסף הדייג`,`------------------------------`,`הזמנה #${o.id}`,new Date(o.createdAt).toLocaleString('he-IL'),`לקוח: ${o.customer||''}`,`טלפון: ${o.phone||''}`,`סוג: ${o.type||''}`,`------------------------------`,`${o.items||''}`,`------------------------------`,`הערות: ${o.notes||''}`,``,``,` `].join('\n')}
+function receiptHtml(o){
+  const dt=new Date(o.createdAt||Date.now()).toLocaleString('he-IL');
+  return `<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><style>
+    @page{margin:0} body{direction:rtl;text-align:right;font-family:Arial,'David','Noto Sans Hebrew',sans-serif;margin:0;padding:0;background:white;color:#000;width:280px;font-size:18px;line-height:1.35}
+    .r{padding:10px 12px}.center{text-align:center}.title{font-size:26px;font-weight:800}.sub{font-size:15px}.line{border-top:1px dashed #000;margin:8px 0}.big{font-size:22px;font-weight:800}.items{font-size:20px;white-space:normal}.notes{font-size:17px}.ltr{direction:ltr;unicode-bidi:bidi-override}.small{font-size:14px}
+  </style></head><body><div class="r">
+    <div class="center title">יוסף הדייג</div>
+    <div class="center sub">יותר טרי מזה עוד שוחה בים</div>
+    <div class="line"></div>
+    <div class="big">הזמנה #${esc(o.id)}</div>
+    <div>${esc(dt)}</div>
+    <div>לקוח: <b>${esc(o.customer||'')}</b></div>
+    <div>טלפון: <span class="ltr">${esc(o.phone||'')}</span></div>
+    <div>סוג: ${esc(o.type||'')}</div>
+    <div class="line"></div>
+    <div class="items">${esc(o.items||'')}</div>
+    ${o.notes?`<div class="line"></div><div class="notes">הערות: ${esc(o.notes)}</div>`:''}
+    <div class="line"></div>
+    <div class="center small">יוסף הדייג · עמק רפאים 42</div>
+    <br><br>
+  </div></body></html>`;
+}
+async function sendToPrinter(o){
+  const cfg=qz.configs.create($('printer').value || 'POS80', { rasterize:true, margins:0, copies:1 });
+  const data=[{ type:'html', format:'plain', data: receiptHtml(o) }];
+  await qz.print(cfg,data);
+}
 async function printOrder(o){
   const ok=await connectQZ(); if(!ok) throw new Error('QZ לא מחובר');
-  const cfg=qz.configs.create($('printer').value || 'POS80', { encoding:'UTF-8' });
-  await qz.print(cfg,[receiptText(o)]);
-  printed.add(o.id); localStorage.setItem('printedIds', JSON.stringify([...printed]));
+  await sendToPrinter(o);
+  printed.add(Number(o.id)); localStorage.setItem('printedIds_v19', JSON.stringify([...printed]));
   await fetch('/api/orders/'+o.id+'/status',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({printed:true,status:'printed',printedAt:new Date().toISOString()})});
+  $('status').innerHTML='<span class="ok">הודפסה הזמנה #'+esc(o.id)+'</span>';
 }
-async function testPrint(){ await printOrder({id:'TEST',createdAt:new Date().toISOString(),customer:'בדיקה',phone:'',type:'בדיקה',items:'בדיקת הדפסה Yosef Orders v1.8',notes:''}); }
+async function testPrint(){ await printOrder({id:'TEST',createdAt:new Date().toISOString(),customer:'בדיקה',phone:'0500000000',type:'בדיקה',items:'בדיקת עברית תקינה\nסלמון 2 קילו\nדניס נקי',notes:'אם זה קריא - התיקון הצליח'}); }
 async function loadOrders(){
   const j=await (await fetch('/api/orders?ts='+Date.now())).json();
-  $('ordersBox').innerHTML=(j.orders||[]).map(o=>`<div class="row"><b>#${o.id} - ${o.customer||'ללא שם'}</b> <span>${o.printed?'✅ הודפס':'🆕 חדש'}</span><br>${o.phone||''}<br>${String(o.items||'').replaceAll('\n','<br>')}<br><button onclick="manualPrint(${o.id})">הדפס / הדפס שוב</button></div>`).join('') || 'אין הזמנות';
-  for(const o of (j.orders||[])){
-    if(!printed.has(o.id) && !o.printed){
-      $('beep').play().catch(()=>{});
+  const orders=j.orders||[];
+  $('ordersBox').innerHTML=orders.map(o=>`<div class="row"><b>#${o.id} - ${esc(o.customer||'ללא שם')}</b> <span>${o.printed?'✅ הודפס':'🆕 חדש'}</span><br>${esc(o.phone||'')}<br>${esc(o.items||'')}<br><button onclick="manualPrint(${Number(o.id)})">הדפס / הדפס שוב</button></div>`).join('') || 'אין הזמנות';
+  for(const o of orders){
+    if(!printed.has(Number(o.id)) && !o.printed){
+      beep();
       try{ await printOrder(o); }
-      catch(e){ $('status').innerHTML='<span class="bad">שגיאת הדפסה: '+e.message+'</span>'; break; }
+      catch(e){ $('status').innerHTML='<span class="bad">שגיאת הדפסה: '+esc(e.message)+'</span>'; break; }
     }
   }
 }
-async function manualPrint(id){ const j=await (await fetch('/api/orders')).json(); const o=(j.orders||[]).find(x=>Number(x.id)===Number(id)); if(o) { await printOrder(o); await loadOrders(); } }
+async function manualPrint(id){ const j=await (await fetch('/api/orders?ts='+Date.now())).json(); const o=(j.orders||[]).find(x=>Number(x.id)===Number(id)); if(o){ await printOrder(o); await loadOrders(); } }
 $('connectBtn').addEventListener('click',connectQZ);
 $('refreshBtn').addEventListener('click',loadOrders);
 $('testBtn').addEventListener('click',testPrint);
+$('resetBtn').addEventListener('click',()=>{localStorage.removeItem('printedIds_v19'); printed=new Set(); loadOrders();});
 connectQZ(); loadOrders(); setInterval(loadOrders,3000);
 </script>
 </body>

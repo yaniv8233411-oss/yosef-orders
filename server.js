@@ -20,9 +20,10 @@ function saveOrders(orders) {
 }
 
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
-app.get('/station', (req, res) => res.sendFile(path.join(__dirname, 'station.html')));
+app.get('/station', (req, res) => res.redirect('/station.html'));
+app.get('/station.html', (req, res) => res.sendFile(path.join(__dirname, 'station.html')));
 
-app.get('/api/health', (req, res) => res.json({ ok: true, version: 'v1.8', time: new Date().toISOString() }));
+app.get('/api/health', (req, res) => res.json({ ok: true, version: 'v1.9', time: new Date().toISOString() }));
 app.get('/api/orders', (req, res) => res.json({ ok: true, orders: loadOrders() }));
 
 app.post('/api/orders', (req, res) => {
@@ -41,7 +42,7 @@ app.post('/api/orders', (req, res) => {
   };
   orders.unshift(order);
   saveOrders(orders);
-  console.log('NEW_ORDER', JSON.stringify({ id: order.id, customer: order.customer, phone: order.phone }));
+  console.log('NEW_ORDER', JSON.stringify({ id: order.id, customer: order.customer, phone: order.phone, items: order.items }));
   res.json({ ok: true, order });
 });
 
@@ -56,4 +57,4 @@ app.post('/api/orders/:id/status', (req, res) => {
   res.json({ ok: true, order });
 });
 
-app.listen(PORT, () => console.log(`Yosef Orders v1.8 server running on port ${PORT}`));
+app.listen(PORT, () => console.log(`Yosef Orders v1.9 server running on port ${PORT}`));
