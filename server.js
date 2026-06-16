@@ -124,4 +124,21 @@ app.post('/api/qz/sign', (req, res) => {
   }
 });
 
-app.listen(PORT, () => console.log('Yosef Orders v3.1 SIGNED TRUST server running on port ' + PORT));
+
+// QZ Tray signed request endpoint - plain text fallback for QZ.
+app.get('/api/qz/sign', (req, res) => {
+  try {
+    const request = String(req.query.request || '');
+    const key = fs.readFileSync(PRIVATE_KEY, 'utf8');
+    const signer = crypto.createSign('RSA-SHA512');
+    signer.update(request, 'utf8');
+    signer.end();
+    const signature = signer.sign(key, 'base64');
+    res.type('text/plain').send(signature);
+  } catch (e) {
+    console.error('QZ_SIGN_GET_ERROR', e.message);
+    res.status(500).type('text/plain').send('');
+  }
+});
+
+app.listen(PORT, () => console.log('Yosef Orders v4.0 FINAL SIGNED server running on port ' + PORT));

@@ -1,7 +1,7 @@
 <!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>תחנת הדפסה</title><script src="https://cdn.jsdelivr.net/npm/qz-tray@2.2.4/qz-tray.js"></script><style>
 body{margin:0;font-family:Arial;background:#eef8fb;color:#123}.hero{background:linear-gradient(135deg,#334,#126);color:#fff;text-align:center;padding:28px}h1{margin:0;font-size:35px}.wrap{max-width:940px;margin:auto;padding:20px}.box{background:#fff;border-radius:18px;padding:22px;margin:18px 0}.btn{border:0;border-radius:12px;background:#177da4;color:white;padding:14px 22px;font-size:20px;margin:5px}.btn.danger{background:#a43}.btn.good{background:#168c54}.status{font-size:20px;color:#933;line-height:1.6}.ok{color:green}.order{border-top:1px solid #ddd;padding:18px;font-size:20px}.big{font-size:24px;font-weight:bold}.printed{color:green}.new{color:#07f}.printing{color:#c78a00}input{font-size:18px;padding:8px}.small{font-size:15px;color:#557}.pill{display:inline-block;border-radius:999px;padding:4px 10px;background:#e8f5ff;margin:2px}</style></head><body>
-<div class="hero"><h1>תחנת הדפסה - יוסף הדייג v3.1 SIGNED TRUST</h1><div>הדפסה אוטומטית פעם אחת בלבד · חתימת QZ · נעילה בשרת</div></div>
-<div class="wrap"><div class="box"><button class="btn" onclick="connectQZ(true)">חבר QZ</button><button class="btn" onclick="refreshAll()">רענן</button><button class="btn" onclick="testPrint()">בדיקת הדפסה</button><button id="autoBtn" class="btn good" onclick="toggleAuto()">הפעל אוטומטי</button><button class="btn danger" onclick="clearLocalLocks()">איפוס נעילות מקומי</button><div id="status" class="status">בודק...</div><label>מדפסת: <input id="printer" value="POS80"></label><div class="small">v3.1: אם QZ שואל פעם אחת, לחץ Allow. לאחר מכן כל הזמנה חדשה תנסה להדפיס פעם אחת בלבד.</div></div><div class="box"><h2>הזמנות</h2><div id="orders">אין הזמנות</div></div></div>
+<div class="hero"><h1>תחנת הדפסה - יוסף הדייג v4.0 FINAL SIGNED</h1><div>הדפסה אוטומטית פעם אחת בלבד · חתימת QZ · נעילה בשרת</div></div>
+<div class="wrap"><div class="box"><button class="btn" onclick="connectQZ(true)">חבר QZ</button><button class="btn" onclick="refreshAll()">רענן</button><button class="btn" onclick="testPrint()">בדיקת הדפסה</button><button id="autoBtn" class="btn good" onclick="toggleAuto()">הפעל אוטומטי</button><button class="btn danger" onclick="clearLocalLocks()">איפוס נעילות מקומי</button><div id="status" class="status">בודק...</div><label>מדפסת: <input id="printer" value="POS80"></label><div class="small">v4.0: חתימה חדשה ומפתח תואם. אם QZ שואל פעם אחת, לחץ Allow; לאחר מכן כל הזמנה תודפס פעם אחת בלבד.</div></div><div class="box"><h2>הזמנות</h2><div id="orders">אין הזמנות</div></div></div>
 <script>
 const API=location.origin;
 const STATION_ID=localStorage.yosefStationId || ('station-'+Math.random().toString(36).slice(2)); localStorage.yosefStationId=STATION_ID;
@@ -11,9 +11,18 @@ let autoEnabled=localStorage.yosefV30Auto==='on';
 let autoBusy=false, connecting=false;
 
 try{
- qz.security.setCertificatePromise((resolve,reject)=>{fetch('/qz-cert.pem?ts='+Date.now()).then(r=>r.text()).then(resolve).catch(reject);});
- qz.security.setSignaturePromise(toSign=>(resolve,reject)=>{fetch('/api/qz/sign',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({request:toSign})}).then(r=>r.json()).then(j=>j.signature?resolve(j.signature):reject(j.error||'no signature')).catch(reject);});
+ if(qz.security.setSignatureAlgorithm) qz.security.setSignatureAlgorithm('SHA512');
+ qz.security.setCertificatePromise((resolve,reject)=>{
+   fetch('/qz-cert.pem?ts='+Date.now(), {cache:'no-store'}).then(r=>r.text()).then(resolve).catch(reject);
+ });
+ qz.security.setSignaturePromise(toSign=>(resolve,reject)=>{
+   fetch('/api/qz/sign?request='+encodeURIComponent(toSign), {cache:'no-store'})
+     .then(r=>r.text())
+     .then(sig=>sig&&sig.trim()?resolve(sig.trim()):reject('empty signature'))
+     .catch(reject);
+ });
 }catch(e){console.log('QZ security setup error',e);}
+
 
 function saveLocal(){localStorage.yosefV30Printed=JSON.stringify(localPrinted);localStorage.yosefV30Tried=JSON.stringify(localTried);}
 function esc(s){return String(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
@@ -45,7 +54,7 @@ async function printOrder(o,manual=false){
  catch(e){if(order.id!=='TEST'){delete localTried[order.id];saveLocal();await releaseOrder(order,e.message||e);}throw e;}
  finally{setTimeout(()=>load(false),600);}
 }
-async function testPrint(){try{await printOrder({id:'TEST',createdAt:new Date().toISOString(),customer:'בדיקה',phone:'',type:'בדיקה',items:'בדיקת הדפסה v3.1 SIGNED TRUST',notes:'אם זה יצא - החיבור עובד'},true);}catch(e){setStatus('שגיאת בדיקה: '+esc(e.message||e));}}
+async function testPrint(){try{await printOrder({id:'TEST',createdAt:new Date().toISOString(),customer:'בדיקה',phone:'',type:'בדיקה',items:'בדיקת הדפסה v4.0 FINAL SIGNED',notes:'אם זה יצא - החיבור עובד'},true);}catch(e){setStatus('שגיאת בדיקה: '+esc(e.message||e));}}
 async function load(doAuto=true){try{const r=await fetch(API+'/api/orders?ts='+Date.now());const j=await r.json();const a=j.orders||[];orders.innerHTML=a.map(o=>`<div class="order"><div class="big ${o.printed?'printed':(o.status==='printing'?'printing':'new')}">${o.printed?'✅':(o.status==='printing'?'⏳':'🆕')} #${o.id} - ${esc(o.customer)}</div><div>${esc(o.phone)}</div><div>${esc(o.items).replace(/\n/g,'<br>')}</div><div><span class="pill">סטטוס: ${esc(o.status||'new')}</span>${localTried[o.id]?'<span class="pill">נוסה מקומית</span>':''}</div><button class="btn" onclick='printOrder(${JSON.stringify(o).replace(/'/g,"&#39;")}, true)'>הדפס ידני</button></div>`).join('')||'אין הזמנות';
  if(doAuto && autoEnabled && !autoBusy && qzActive()){const next=a.find(o=>!o.printed && (o.status||'new')==='new' && !localPrinted[o.id] && !localTried[o.id]);if(next){autoBusy=true;try{await printOrder(next,false);}catch(e){setStatus('שגיאת אוטומטי: '+esc(e.message||e));}finally{autoBusy=false;}}}
 }catch(e){setStatus('שגיאת טעינת הזמנות: '+esc(e.message||e));}}

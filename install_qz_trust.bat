@@ -1,24 +1,15 @@
 @echo off
-chcp 65001 >nul
-TITLE Yosef Orders - QZ Trust Fix
-ECHO.
-ECHO Installing Yosef Orders certificate for QZ Tray...
-ECHO.
-
-REM Stop QZ Tray if running
-taskkill /IM qz-tray.exe /F >nul 2>nul
-taskkill /IM javaw.exe /F >nul 2>nul
-
-timeout /t 2 /nobreak >nul
-
-REM Copy certificate to QZ override locations
-copy /Y "%~dp0qz-cert.pem" "C:\Program Files\QZ Tray\override.crt" >nul 2>nul
-copy /Y "%~dp0qz-cert.pem" "C:\ProgramData\qz\override.crt" >nul 2>nul
-if not exist "%APPDATA%\qz" mkdir "%APPDATA%\qz" >nul 2>nul
-copy /Y "%~dp0qz-cert.pem" "%APPDATA%\qz\override.crt" >nul 2>nul
-
-ECHO.
-ECHO Done. Now open QZ Tray again from Start Menu.
-ECHO Then open https://yosef-orders.onrender.com/station.html
-ECHO.
-PAUSE
+title Yosef Orders - QZ Trust Fix v4
+cd /d "%~dp0"
+echo Installing Yosef Orders v4 certificate for QZ Tray...
+if not exist "%ProgramData%\qz" mkdir "%ProgramData%\qz"
+copy /Y "override.crt" "%ProgramData%\qz\override.crt" >nul
+copy /Y "override.crt" "%ProgramData%\qz\root-ca.crt" >nul
+echo.
+echo Done.
+echo IMPORTANT:
+echo 1. Right click QZ Tray icon near clock and choose Exit.
+echo 2. Open QZ Tray again from Start Menu.
+echo 3. Open https://yosef-orders.onrender.com/station.html
+echo.
+pause
