@@ -1,1 +1,1 @@
-{"scripts":{"start":"node server.js"},"dependencies":{}}
+{"scripts":{"start":"node server.js"},"dependencies":{"express":"latest","cors":"latest"},"engines":{"node":">=18"}}

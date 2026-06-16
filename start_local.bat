@@ -1,5 +1,5 @@
 @echo off
-cd /d "%~dp0"
-echo Starting Yosef Orders v1.6...
-node server.js
+cd /d %~dp0
+npm install
+npm start
 pause
