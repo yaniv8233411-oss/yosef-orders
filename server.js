@@ -124,4 +124,4 @@ app.post('/api/qz/sign', (req, res) => {
   }
 });
 
-app.listen(PORT, () => console.log('Yosef Orders v3.0 ENTERPRISE server running on port ' + PORT));
+app.listen(PORT, () => console.log('Yosef Orders v3.1 SIGNED TRUST server running on port ' + PORT));
