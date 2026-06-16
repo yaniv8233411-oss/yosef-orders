@@ -1,102 +1,56 @@
 <!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>תחנת הדפסה</title><script src="https://cdn.jsdelivr.net/npm/qz-tray@2.2.4/qz-tray.js"></script><style>
-body{margin:0;font-family:Arial;background:#eef8fb;color:#123}.hero{background:linear-gradient(135deg,#334,#126);color:#fff;text-align:center;padding:30px}h1{margin:0;font-size:36px}.wrap{max-width:900px;margin:auto;padding:20px}.box{background:#fff;border-radius:18px;padding:22px;margin:18px 0}.btn{border:0;border-radius:12px;background:#177da4;color:white;padding:14px 22px;font-size:20px;margin:5px}.btn.danger{background:#a43}.status{font-size:20px;color:#933;line-height:1.5}.ok{color:green}.order{border-top:1px solid #ddd;padding:18px;font-size:20px}.big{font-size:24px;font-weight:bold}.printed{color:green}.new{color:#07f}.printing{color:#c78a00}input{font-size:18px;padding:8px}.small{font-size:15px;color:#557}</style></head><body><div class="hero"><h1>תחנת הדפסה - יוסף הדייג v2.4 ULTIMATE</h1><div>הדפסה פעם אחת בלבד · כולל נעילה בשרת נגד כמה טאבים פתוחים</div></div><div class="wrap"><div class="box"><button class="btn" onclick="connectQZ(true)">חבר QZ</button><button class="btn" onclick="refreshAll()">רענן</button><button class="btn" onclick="testPrint()">בדיקת הדפסה</button><button class="btn danger" onclick="stopAuto()">עצור הדפסה אוטומטית</button><button class="btn" onclick="startAuto()">הפעל אוטומטי</button><div id="status" class="status">בודק...</div><label>מדפסת: <input id="printer" value="POS80"></label><div class="small">v2.4 ULTIMATE: לפני כל הדפסה אוטומטית התחנה מבקשת Claim מהשרת. רק תחנה/טאב אחד יכול להדפיס הזמנה.</div></div><div class="box"><h2>הזמנות</h2><div id="orders">אין הזמנות</div></div></div><script>
+body{margin:0;font-family:Arial;background:#eef8fb;color:#123}.hero{background:linear-gradient(135deg,#334,#126);color:#fff;text-align:center;padding:28px}h1{margin:0;font-size:35px}.wrap{max-width:940px;margin:auto;padding:20px}.box{background:#fff;border-radius:18px;padding:22px;margin:18px 0}.btn{border:0;border-radius:12px;background:#177da4;color:white;padding:14px 22px;font-size:20px;margin:5px}.btn.danger{background:#a43}.btn.good{background:#168c54}.status{font-size:20px;color:#933;line-height:1.6}.ok{color:green}.order{border-top:1px solid #ddd;padding:18px;font-size:20px}.big{font-size:24px;font-weight:bold}.printed{color:green}.new{color:#07f}.printing{color:#c78a00}input{font-size:18px;padding:8px}.small{font-size:15px;color:#557}.pill{display:inline-block;border-radius:999px;padding:4px 10px;background:#e8f5ff;margin:2px}</style></head><body>
+<div class="hero"><h1>תחנת הדפסה - יוסף הדייג v3.0 ENTERPRISE</h1><div>הדפסה אוטומטית פעם אחת בלבד · חתימת QZ · נעילה בשרת</div></div>
+<div class="wrap"><div class="box"><button class="btn" onclick="connectQZ(true)">חבר QZ</button><button class="btn" onclick="refreshAll()">רענן</button><button class="btn" onclick="testPrint()">בדיקת הדפסה</button><button id="autoBtn" class="btn good" onclick="toggleAuto()">הפעל אוטומטי</button><button class="btn danger" onclick="clearLocalLocks()">איפוס נעילות מקומי</button><div id="status" class="status">בודק...</div><label>מדפסת: <input id="printer" value="POS80"></label><div class="small">v3.0: אם QZ שואל פעם אחת, לחץ Allow. לאחר מכן כל הזמנה חדשה תנסה להדפיס פעם אחת בלבד.</div></div><div class="box"><h2>הזמנות</h2><div id="orders">אין הזמנות</div></div></div>
+<script>
 const API=location.origin;
-let known=JSON.parse(localStorage.yosefPrinted||'{}');
-let localPrinting=JSON.parse(localStorage.yosefPrinting||'{}');
-let connecting=false;
-let autoEnabled=localStorage.yosefAutoPrint!=='off';
-let autoBusy=false;
+const STATION_ID=localStorage.yosefStationId || ('station-'+Math.random().toString(36).slice(2)); localStorage.yosefStationId=STATION_ID;
+let localPrinted=JSON.parse(localStorage.yosefV30Printed||'{}');
+let localTried=JSON.parse(localStorage.yosefV30Tried||'{}');
+let autoEnabled=localStorage.yosefV30Auto==='on';
+let autoBusy=false, connecting=false;
 
 try{
-  qz.security.setCertificatePromise((resolve,reject)=>resolve(null));
-  qz.security.setSignaturePromise(toSign => (resolve,reject)=>resolve(null));
-}catch(e){ console.log('security setup skipped', e); }
+ qz.security.setCertificatePromise((resolve,reject)=>{fetch('/qz-cert.pem?ts='+Date.now()).then(r=>r.text()).then(resolve).catch(reject);});
+ qz.security.setSignaturePromise(toSign=>(resolve,reject)=>{fetch('/api/qz/sign',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({request:toSign})}).then(r=>r.json()).then(j=>j.signature?resolve(j.signature):reject(j.error||'no signature')).catch(reject);});
+}catch(e){console.log('QZ security setup error',e);}
 
-function setStatus(t, good=false){ const el=document.getElementById('status'); el.className='status '+(good?'ok':''); el.innerHTML=t; console.log('STATUS:', t); }
-function qzActive(){ try{return qz.websocket && qz.websocket.isActive();}catch(e){return false;} }
-function saveLocal(){ localStorage.yosefPrinted=JSON.stringify(known); localStorage.yosefPrinting=JSON.stringify(localPrinting); }
+function saveLocal(){localStorage.yosefV30Printed=JSON.stringify(localPrinted);localStorage.yosefV30Tried=JSON.stringify(localTried);}
 function esc(s){return String(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
-function monitorQZ(){ if(qzActive()) setStatus('QZ מחובר ✅ · מדפסת: '+(printer.value||'POS80')+' · אוטומטי: '+(autoEnabled?'פעיל':'כבוי'), true); }
-setInterval(monitorQZ,2000);
+function setStatus(t,good=false){status.className='status '+(good?'ok':'');status.innerHTML=t;console.log('STATUS',t)}
+function qzActive(){try{return qz.websocket.isActive();}catch(e){return false;}}
+function updateAutoBtn(){autoBtn.textContent=autoEnabled?'עצור אוטומטי':'הפעל אוטומטי';autoBtn.className='btn '+(autoEnabled?'danger':'good');}
+function beep(){try{const ac=new (window.AudioContext||window.webkitAudioContext)();const o=ac.createOscillator();const g=ac.createGain();o.frequency.value=880;o.connect(g);g.connect(ac.destination);g.gain.value=.12;o.start();setTimeout(()=>{o.stop();ac.close();},300);}catch(e){}}
 
 async function connectQZ(manual=false){
-  if(qzActive()){ setStatus('QZ מחובר ✅ · מדפסת: '+(printer.value||'POS80'), true); return true; }
-  if(connecting){ setStatus('ממתין לאישור QZ... אם קופץ חלון, לחץ Allow'); return false; }
-  connecting=true; setStatus('מתחבר ל-QZ... אם קופץ חלון, לחץ Allow');
-  try{
-    const result=await Promise.race([
-      qz.websocket.connect({retries:1,delay:1}).then(()=> 'ok'),
-      new Promise(resolve=>setTimeout(()=>resolve('timeout'),4500))
-    ]);
-    connecting=false;
-    if(result==='timeout' && !qzActive()){ setStatus('QZ ממתין לאישור. לחץ Allow ואז חבר QZ שוב.'); return false; }
-    setStatus('QZ מחובר ✅ · מדפסת: '+(printer.value||'POS80'), true); return true;
-  }catch(e){
-    connecting=false;
-    if(qzActive()){ setStatus('QZ מחובר ✅ · מדפסת: '+(printer.value||'POS80'), true); return true; }
-    setStatus('QZ לא מחובר: '+((e&&(e.message||e.toString()))||e)); return false;
-  }
+ if(qzActive()){setStatus('QZ מחובר ✅ · מדפסת: '+printer.value+' · אוטומטי: '+(autoEnabled?'פעיל':'כבוי'),true);return true;}
+ if(connecting){setStatus('ממתין ל-QZ... אם קופץ חלון לחץ Allow');return false;}
+ connecting=true;setStatus('מתחבר ל-QZ... אם קופץ חלון לחץ Allow');
+ try{await qz.websocket.connect({retries:1,delay:1});connecting=false;setStatus('QZ מחובר ✅ · מדפסת: '+printer.value,true);return true;}
+ catch(e){connecting=false;if(qzActive()){setStatus('QZ מחובר ✅',true);return true;}setStatus('QZ לא מחובר: '+esc(e.message||e));return false;}
 }
-async function ensureQZ(){ return qzActive() || await connectQZ(false); }
-async function getConfig(){ if(!await ensureQZ()) throw new Error('QZ לא מחובר'); return qz.configs.create(printer.value||'POS80',{encoding:'UTF-8'}); }
-function htmlReceipt(o){return `<!doctype html><html dir="rtl"><body style="font-family:Arial;width:270px;text-align:right;font-size:18px"><center><h2>יוסף הדייג</h2><div>יותר טרי מזה עוד שוחה בים</div></center><hr><h2>הזמנה #${esc(o.id)}</h2><div>${new Date(o.createdAt||Date.now()).toLocaleString('he-IL')}</div><p>לקוח: ${esc(o.customer)}<br>טלפון: ${esc(o.phone)}<br>סוג: ${esc(o.type)}</p><hr><div style="white-space:pre-wrap;font-size:20px">${esc(o.items)}</div><hr><div style="white-space:pre-wrap">הערות: ${esc(o.notes)}</div><br><center>יוסף הדייג · עמק רפאים 42</center></body></html>`}
-
-async function setServerStatus(o, status, printed){
-  if(!o || o.id==='TEST') return;
-  try{ await fetch(API+'/api/orders/'+o.id+'/status',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status,printed})}); }catch(e){ console.log('status update failed', e); }
+async function ensureQZ(){return qzActive() || await connectQZ(false);}
+function receiptHtml(o){const dt=new Date(o.createdAt||Date.now()).toLocaleString('he-IL');return `<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><style>@page{margin:0}body{direction:rtl;text-align:right;font-family:Arial,'David',sans-serif;margin:0;padding:0;background:#fff;color:#000;width:280px;font-size:18px;line-height:1.35}.r{padding:10px 12px}.center{text-align:center}.title{font-size:28px;font-weight:800}.sub{font-size:15px}.line{border-top:1px dashed #000;margin:9px 0}.big{font-size:24px;font-weight:800}.items{font-size:20px}.notes{font-size:17px}.ltr{direction:ltr;unicode-bidi:bidi-override}.small{font-size:14px}</style></head><body><div class="r"><div class="center title">יוסף הדייג</div><div class="center sub">יותר טרי מזה עוד שוחה בים</div><div class="line"></div><div class="big">הזמנה #${esc(o.id)}</div><div>${esc(dt)}</div><div>לקוח: <b>${esc(o.customer||'')}</b></div><div>טלפון: <span class="ltr">${esc(o.phone||'')}</span></div><div>סוג: ${esc(o.type||'')}</div><div class="line"></div><div class="items">${esc(o.items||'').replace(/\n/g,'<br>')}</div>${o.notes?`<div class="line"></div><div class="notes">הערות: ${esc(o.notes).replace(/\n/g,'<br>')}</div>`:''}<div class="line"></div><div class="center small">יוסף הדייג · עמק רפאים 42</div><br><br></div></body></html>`;}
+async function qzPrint(o){const cfg=qz.configs.create(printer.value||'POS80',{rasterize:true,margins:0,copies:1});await qz.print(cfg,[{type:'html',format:'plain',data:receiptHtml(o)}]);}
+async function claimOrder(o){const r=await fetch(API+'/api/orders/'+o.id+'/claim',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({stationId:STATION_ID})});return await r.json();}
+async function markPrinted(o){localPrinted[o.id]=true;saveLocal();await fetch(API+'/api/orders/'+o.id+'/status',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:'printed',printed:true,printedAt:new Date().toISOString()})});}
+async function releaseOrder(o,err){await fetch(API+'/api/orders/'+o.id+'/release',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({error:String(err||'')})}).catch(()=>{});}
+async function printOrder(o,manual=false){
+ if(!manual && (localPrinted[o.id]||localTried[o.id])) return;
+ if(!manual) {localTried[o.id]=Date.now(); saveLocal();}
+ const ok=await ensureQZ(); if(!ok) throw new Error('QZ לא מחובר');
+ let order=o;
+ if(o.id!=='TEST' && !manual){const c=await claimOrder(o);if(!c.claimed){setStatus('הזמנה #'+o.id+' כבר נתפסה/הודפסה: '+(c.reason||''),true);return;}order=c.order;}
+ try{setStatus('מדפיס הזמנה #'+order.id+'... אם QZ שואל לחץ Allow');await qzPrint(order);if(order.id!=='TEST') await markPrinted(order);setStatus('הודפסה פעם אחת ✅ הזמנה #'+order.id,true);beep();}
+ catch(e){if(order.id!=='TEST'){delete localTried[order.id];saveLocal();await releaseOrder(order,e.message||e);}throw e;}
+ finally{setTimeout(()=>load(false),600);}
 }
-async function claimOrder(o){
-  if(!o || o.id==='TEST') return true;
-  const r=await fetch(API+'/api/orders/'+o.id+'/claim',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});
-  const data=await r.json();
-  console.log('CLAIM_RESULT', data);
-  if(data.claimed && data.order) return data.order;
-  return false;
-}
-
-async function printOrder(o, manual=false){
-  if(!o) return;
-  if(o.id!=='TEST'){
-    if(!manual && (o.printed || o.status==='printed' || known[o.id] || localPrinting[o.id])){ console.log('skip duplicate local/server', o.id); return; }
-    if(!manual){
-      const claimed=await claimOrder(o);
-      if(!claimed){ console.log('not claimed, skip', o.id); return; }
-      o=claimed;
-    } else {
-      // manual print is allowed, but still mark local lock to avoid auto duplicate while popup is open
-      localPrinting[o.id]=Date.now(); saveLocal();
-    }
-  }
-  try{
-    setStatus('מדפיס הזמנה #'+o.id+'...');
-    const c=await getConfig();
-    await qz.print(c,[{type:'pixel',format:'html',flavor:'plain',data:htmlReceipt(o)}]);
-    if(o.id!=='TEST'){
-      delete localPrinting[o.id]; known[o.id]=true; saveLocal();
-      await setServerStatus(o,'printed',true);
-    }
-    setStatus('הודפס ✅ הזמנה #'+o.id, true);
-  }catch(e){
-    if(o.id!=='TEST'){
-      delete localPrinting[o.id]; saveLocal();
-      if(!manual) await setServerStatus(o,'new',false); // release lock only for failed auto claim
-    }
-    throw e;
-  }finally{ await load(false); }
-}
-async function testPrint(){ try{ await printOrder({id:'TEST',createdAt:new Date().toISOString(),customer:'בדיקה',phone:'',type:'בדיקה',items:'בדיקת הדפסה v2.4 ULTIMATE',notes:'אם זה יצא - החיבור עובד'}, true); }catch(e){ setStatus('שגיאת בדיקת הדפסה: '+(e.message||e)); } }
-async function load(doAuto=true){
-  try{
-    const r=await fetch(API+'/api/orders?ts='+Date.now()); const a=await r.json();
-    orders.innerHTML=a.map(o=>`<div class="order"><div class="big ${o.printed?'printed':(o.status==='printing'?'printing':'new')}">${o.printed?'✅':(o.status==='printing'?'⏳':'🆕')} #${o.id} - ${esc(o.customer)}</div><div>${esc(o.phone)}</div><div>${esc(o.items).replace(/\n/g,'<br>')}</div><div>סטטוס: ${esc(o.status||'new')}</div><button class="btn" onclick='printOrder(${JSON.stringify(o).replace(/'/g,"&#39;")}, true)'>הדפס / הדפס שוב</button></div>`).join('')||'אין הזמנות';
-    if(doAuto && autoEnabled && !autoBusy && qzActive()){
-      const next=a.find(o=>!o.printed && (o.status||'new')==='new' && !known[o.id] && !localPrinting[o.id]);
-      if(next){ autoBusy=true; try{ await printOrder(next,false); }catch(e){ setStatus('שגיאת הדפסה אוטומטית: '+(e.message||e)); } finally{ autoBusy=false; } }
-    }
-  }catch(e){ setStatus('שגיאת טעינת הזמנות: '+(e.message||e)); }
-}
-function refreshAll(){ if(qzActive()) setStatus('QZ מחובר ✅ · מדפסת: '+(printer.value||'POS80'), true); else connectQZ(false); load(true); }
-function stopAuto(){ autoEnabled=false; localStorage.yosefAutoPrint='off'; setStatus('הדפסה אוטומטית נעצרה ⛔'); }
-function startAuto(){ autoEnabled=true; localStorage.yosefAutoPrint='on'; setStatus('הדפסה אוטומטית פעילה ✅', true); load(true); }
-load(false); setTimeout(()=>connectQZ(false),700); setInterval(()=>load(true),5000);
+async function testPrint(){try{await printOrder({id:'TEST',createdAt:new Date().toISOString(),customer:'בדיקה',phone:'',type:'בדיקה',items:'בדיקת הדפסה v3.0 ENTERPRISE',notes:'אם זה יצא - החיבור עובד'},true);}catch(e){setStatus('שגיאת בדיקה: '+esc(e.message||e));}}
+async function load(doAuto=true){try{const r=await fetch(API+'/api/orders?ts='+Date.now());const j=await r.json();const a=j.orders||[];orders.innerHTML=a.map(o=>`<div class="order"><div class="big ${o.printed?'printed':(o.status==='printing'?'printing':'new')}">${o.printed?'✅':(o.status==='printing'?'⏳':'🆕')} #${o.id} - ${esc(o.customer)}</div><div>${esc(o.phone)}</div><div>${esc(o.items).replace(/\n/g,'<br>')}</div><div><span class="pill">סטטוס: ${esc(o.status||'new')}</span>${localTried[o.id]?'<span class="pill">נוסה מקומית</span>':''}</div><button class="btn" onclick='printOrder(${JSON.stringify(o).replace(/'/g,"&#39;")}, true)'>הדפס ידני</button></div>`).join('')||'אין הזמנות';
+ if(doAuto && autoEnabled && !autoBusy && qzActive()){const next=a.find(o=>!o.printed && (o.status||'new')==='new' && !localPrinted[o.id] && !localTried[o.id]);if(next){autoBusy=true;try{await printOrder(next,false);}catch(e){setStatus('שגיאת אוטומטי: '+esc(e.message||e));}finally{autoBusy=false;}}}
+}catch(e){setStatus('שגיאת טעינת הזמנות: '+esc(e.message||e));}}
+function refreshAll(){connectQZ(false);load(true)}
+function toggleAuto(){autoEnabled=!autoEnabled;localStorage.yosefV30Auto=autoEnabled?'on':'off';updateAutoBtn();setStatus('אוטומטי: '+(autoEnabled?'פעיל ✅':'כבוי ⛔'),autoEnabled);load(true)}
+function clearLocalLocks(){localTried={};localPrinted={};saveLocal();setStatus('איפוס מקומי בוצע ✅',true);load(false)}
+updateAutoBtn();load(false);setTimeout(()=>connectQZ(false),500);setInterval(()=>load(true),4000);setInterval(()=>{if(qzActive())setStatus('QZ מחובר ✅ · מדפסת: '+printer.value+' · אוטומטי: '+(autoEnabled?'פעיל':'כבוי'),true)},5000);
 </script></body></html>
