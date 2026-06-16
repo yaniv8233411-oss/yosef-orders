@@ -2,22 +2,58 @@ const express = require('express');
 const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
+
 const app = express();
 const PORT = process.env.PORT || 10000;
 const DB = path.join(__dirname, 'orders.json');
+
 app.use(cors());
-app.use(express.json({limit:'1mb'}));
+app.use(express.json({ limit: '1mb' }));
 app.use(express.static(__dirname));
-function load(){try{return JSON.parse(fs.readFileSync(DB,'utf8')||'[]')}catch(e){return []}}
-function save(x){fs.writeFileSync(DB, JSON.stringify(x,null,2),'utf8')}
-app.get('/', (req,res)=>res.sendFile(path.join(__dirname,'index.html')));
-app.get('/station', (req,res)=>res.sendFile(path.join(__dirname,'station.html')));
-app.get('/api/orders', (req,res)=>res.json({ok:true,orders:load()}));
-app.post('/api/orders', (req,res)=>{
-  const orders=load();
-  const next = orders.length ? Math.max(...orders.map(o=>o.id||1000))+1 : 1001;
-  const o={id:next, createdAt:new Date().toISOString(), status:'new', printed:false, ...req.body};
-  orders.unshift(o); save(orders); res.json({ok:true,order:o});
+
+function loadOrders() {
+  try { return JSON.parse(fs.readFileSync(DB, 'utf8') || '[]'); }
+  catch { return []; }
+}
+function saveOrders(orders) {
+  fs.writeFileSync(DB, JSON.stringify(orders, null, 2), 'utf8');
+}
+
+app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
+app.get('/station', (req, res) => res.sendFile(path.join(__dirname, 'station.html')));
+
+app.get('/api/health', (req, res) => res.json({ ok: true, version: 'v1.8', time: new Date().toISOString() }));
+app.get('/api/orders', (req, res) => res.json({ ok: true, orders: loadOrders() }));
+
+app.post('/api/orders', (req, res) => {
+  const orders = loadOrders();
+  const nextId = orders.length ? Math.max(...orders.map(o => Number(o.id) || 1000)) + 1 : 1001;
+  const order = {
+    id: nextId,
+    createdAt: new Date().toISOString(),
+    status: 'new',
+    printed: false,
+    customer: req.body.customer || '',
+    phone: req.body.phone || '',
+    items: req.body.items || '',
+    notes: req.body.notes || '',
+    type: req.body.type || 'איסוף עצמי'
+  };
+  orders.unshift(order);
+  saveOrders(orders);
+  console.log('NEW_ORDER', JSON.stringify({ id: order.id, customer: order.customer, phone: order.phone }));
+  res.json({ ok: true, order });
 });
-app.post('/api/orders/:id/status',(req,res)=>{const id=+req.params.id; const orders=load(); const o=orders.find(x=>x.id===id); if(!o)return res.status(404).json({ok:false,error:'not found'}); Object.assign(o, req.body); save(orders); res.json({ok:true,order:o});});
-app.listen(PORT, ()=>console.log(`Yosef Orders v1.7 server running on port ${PORT}`));
+
+app.post('/api/orders/:id/status', (req, res) => {
+  const id = Number(req.params.id);
+  const orders = loadOrders();
+  const order = orders.find(o => Number(o.id) === id);
+  if (!order) return res.status(404).json({ ok: false, error: 'not found' });
+  Object.assign(order, req.body);
+  saveOrders(orders);
+  console.log('ORDER_STATUS', JSON.stringify({ id: order.id, status: order.status, printed: order.printed }));
+  res.json({ ok: true, order });
+});
+
+app.listen(PORT, () => console.log(`Yosef Orders v1.8 server running on port ${PORT}`));

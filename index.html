@@ -1,1 +1,56 @@
-<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>יוסף הדייג - הזמנות</title><style>body{margin:0;font-family:Arial;background:#eaf8fb;color:#123}.head{background:linear-gradient(135deg,#008899,#005b73);color:white;padding:28px;text-align:center;border-radius:0 0 30px 30px}.wrap{max-width:760px;margin:auto;padding:18px}.card{background:white;border-radius:24px;padding:20px;box-shadow:0 8px 25px #0001;margin:18px 0}textarea,input,select{width:100%;box-sizing:border-box;border:1px solid #b8dce3;border-radius:14px;padding:14px;font-size:18px;margin:8px 0}button{width:100%;border:0;border-radius:16px;background:#008899;color:white;font-size:22px;font-weight:bold;padding:16px;margin-top:10px}.tabs{display:flex;gap:8px}.tabs button{background:#dff5f8;color:#006474}.small{font-size:14px;color:#678}.order{border-top:1px solid #ddd;padding:12px 0}</style></head><body><div class="head"><h1>יוסף הדייג</h1><div>Yosef Orders v1.7 · טלפון → קופה → POS80</div></div><div class="wrap"><div class="tabs"><button onclick="showNew()">➕ הזמנה חדשה</button><button onclick="loadOrders()">📋 הזמנות אחרונות</button></div><div id="new" class="card"><h2>הזמנה חדשה</h2><label>שם לקוח</label><input id="customer" placeholder="שם הלקוח"><label>טלפון</label><input id="phone" placeholder="052..."><label>מה הלקוח רוצה?</label><textarea id="items" rows="5" placeholder="לדוגמה: 2 קילו סלמון פרוס, דניס נקי, להשאיר ראש"></textarea><label>הערות כלליות</label><textarea id="notes" rows="3" placeholder="להכין ל-2, משלוח, דחוף..."></textarea><label>סוג הזמנה</label><select id="type"><option>איסוף עצמי</option><option>משלוח</option></select><button onclick="sendOrder()">שלח הזמנה לקופה</button><div id="msg" class="small"></div></div><div id="list" class="card" style="display:none"><h2>הזמנות אחרונות</h2><div id="orders"></div></div></div><script>const API='';function showNew(){new.style.display='block';list.style.display='none'}async function sendOrder(){const body={customer:customer.value,phone:phone.value,items:items.value,notes:notes.value,type:type.value}; if(!body.items.trim()){msg.textContent='צריך למלא מה הלקוח רוצה';return} msg.textContent='שולח...'; const r=await fetch(API+'/api/orders',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}); const j=await r.json(); if(j.ok){msg.textContent='הזמנה #'+j.order.id+' נשלחה לקופה'; customer.value=phone.value=items.value=notes.value=''; loadOrders()}else msg.textContent='שגיאה בשליחה'}async function loadOrders(){new.style.display='none';list.style.display='block'; const j=await (await fetch('/api/orders')).json(); orders.innerHTML=j.orders.slice(0,20).map(o=>`<div class=order><b>#${o.id} - ${o.customer||'ללא שם'}</b><br>${o.phone||''}<br>${(o.items||'').replaceAll('\n','<br>')}<br><span class=small>${new Date(o.createdAt).toLocaleString('he-IL')} · ${o.status||'new'}</span></div>`).join('')||'אין הזמנות';}</script></body></html>
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>יוסף הדייג - הזמנות</title>
+<style>
+body{margin:0;font-family:Arial;background:#eaf8fb;color:#123}.head{background:linear-gradient(135deg,#008899,#005b73);color:white;padding:28px;text-align:center;border-radius:0 0 30px 30px}.wrap{max-width:760px;margin:auto;padding:18px}.card{background:white;border-radius:24px;padding:20px;box-shadow:0 8px 25px #0001;margin:18px 0}textarea,input,select{width:100%;box-sizing:border-box;border:1px solid #b8dce3;border-radius:14px;padding:14px;font-size:18px;margin:8px 0}button{width:100%;border:0;border-radius:16px;background:#008899;color:white;font-size:22px;font-weight:bold;padding:16px;margin-top:10px}.tabs{display:flex;gap:8px}.tabs button{background:#dff5f8;color:#006474}.small{font-size:15px;color:#678;margin-top:10px}.ok{color:#078a34}.bad{color:#b00020}.order{border-top:1px solid #ddd;padding:12px 0;line-height:1.5}
+</style>
+</head>
+<body>
+<div class="head"><h1>יוסף הדייג</h1><div>Yosef Orders v1.8 · טלפון → קופה → POS80</div></div>
+<div class="wrap">
+  <div class="tabs"><button id="btnNew">➕ הזמנה חדשה</button><button id="btnList">📋 הזמנות אחרונות</button></div>
+  <div id="newPanel" class="card">
+    <h2>הזמנה חדשה</h2>
+    <label>שם לקוח</label><input id="customer" placeholder="שם הלקוח">
+    <label>טלפון</label><input id="phone" placeholder="052...">
+    <label>מה הלקוח רוצה?</label><textarea id="items" rows="5" placeholder="לדוגמה: 2 קילו סלמון פרוס, דניס נקי, להשאיר ראש"></textarea>
+    <label>הערות כלליות</label><textarea id="notes" rows="3" placeholder="להכין ל-2, משלוח, דחוף..."></textarea>
+    <label>סוג הזמנה</label><select id="orderType"><option>איסוף עצמי</option><option>משלוח</option></select>
+    <button id="sendBtn">שלח הזמנה לקופה</button>
+    <div id="msg" class="small"></div>
+  </div>
+  <div id="listPanel" class="card" style="display:none"><h2>הזמנות אחרונות</h2><div id="ordersBox"></div></div>
+</div>
+<script>
+const $ = (id) => document.getElementById(id);
+function showNew(){ $('newPanel').style.display='block'; $('listPanel').style.display='none'; }
+function showList(){ $('newPanel').style.display='none'; $('listPanel').style.display='block'; loadOrders(); }
+async function sendOrder(){
+  const body={customer:$('customer').value.trim(),phone:$('phone').value.trim(),items:$('items').value.trim(),notes:$('notes').value.trim(),type:$('orderType').value};
+  if(!body.items){ $('msg').innerHTML='<span class="bad">צריך למלא מה הלקוח רוצה</span>'; return; }
+  $('sendBtn').disabled=true; $('msg').textContent='שולח לקופה...';
+  try{
+    const r=await fetch('/api/orders',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const j=await r.json();
+    if(j.ok){
+      $('msg').innerHTML='<span class="ok">הזמנה #'+j.order.id+' נשלחה לקופה</span>';
+      $('customer').value=''; $('phone').value=''; $('items').value=''; $('notes').value='';
+      setTimeout(showList,700);
+    } else $('msg').innerHTML='<span class="bad">שגיאה בשליחה</span>';
+  }catch(e){ $('msg').innerHTML='<span class="bad">שגיאה: '+e.message+'</span>'; }
+  finally{ $('sendBtn').disabled=false; }
+}
+async function loadOrders(){
+  try{
+    const j=await (await fetch('/api/orders?ts='+Date.now())).json();
+    $('ordersBox').innerHTML=(j.orders||[]).slice(0,30).map(o=>`<div class="order"><b>#${o.id} - ${o.customer||'ללא שם'}</b><br>${o.phone||''}<br>${String(o.items||'').replaceAll('\n','<br>')}<br><span class="small">${new Date(o.createdAt).toLocaleString('he-IL')} · ${o.status||'new'} ${o.printed?'· הודפס':''}</span></div>`).join('') || 'אין הזמנות';
+  }catch(e){ $('ordersBox').innerHTML='<span class="bad">שגיאה בטעינת הזמנות: '+e.message+'</span>'; }
+}
+$('btnNew').addEventListener('click',showNew);
+$('btnList').addEventListener('click',showList);
+$('sendBtn').addEventListener('click',sendOrder);
+</script>
+</body>
+</html>

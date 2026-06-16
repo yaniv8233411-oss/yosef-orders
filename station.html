@@ -1,1 +1,52 @@
-<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>תחנת הדפסה - יוסף הדייג</title><script src="https://cdn.jsdelivr.net/npm/qz-tray@2.2.4/qz-tray.js"></script><style>body{font-family:Arial;background:#f5fbfc;margin:0;color:#123}.head{background:#0b6f83;color:white;padding:18px;text-align:center}.wrap{max-width:900px;margin:auto;padding:16px}.card{background:white;border-radius:18px;padding:16px;margin:12px 0;box-shadow:0 4px 18px #0001}button{border:0;border-radius:12px;background:#0b8aa0;color:white;font-weight:bold;padding:12px 18px;margin:5px;font-size:16px}.bad{color:#b00020}.ok{color:#078a34}.row{border-top:1px solid #ddd;padding:12px 0}</style></head><body><div class="head"><h1>תחנת הדפסה - יוסף הדייג</h1><div>השאר דף זה פתוח בקופה · QZ Tray חייב להיות פתוח</div></div><div class="wrap"><div class="card"><button onclick="connectQZ()">חבר QZ</button><button onclick="load(true)">רענן</button><button onclick="testPrint()">בדיקת הדפסה</button><div id="status">בודק...</div><div>מדפסת: <input id="printer" value="POS80" style="font-size:16px;padding:8px;border-radius:8px;border:1px solid #ccc"></div></div><div class="card"><h2>הזמנות</h2><div id="orders"></div></div></div><audio id="beep"><source src="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA="></audio><script>let printed=new Set(JSON.parse(localStorage.printedIds||'[]'));let qzReady=false;async function connectQZ(){try{if(!qz.websocket.isActive()) await qz.websocket.connect(); qzReady=true; status.innerHTML='<span class=ok>QZ מחובר</span>'}catch(e){status.innerHTML='<span class=bad>QZ לא מחובר: '+e.message+'</span>'}}function text(o){return [`יוסף הדייג`,`------------------------------`,`הזמנה #${o.id}`,new Date(o.createdAt).toLocaleString('he-IL'),`לקוח: ${o.customer||''}`,`טלפון: ${o.phone||''}`,`סוג: ${o.type||''}`,`------------------------------`,`${o.items||''}`,`------------------------------`,`הערות: ${o.notes||''}`,`\n\n\n`].join('\n')}async function printOrder(o){await connectQZ(); const cfg=qz.configs.create(printer.value||'POS80',{encoding:'UTF-8'}); await qz.print(cfg,[text(o)]); printed.add(o.id); localStorage.printedIds=JSON.stringify([...printed]); await fetch('/api/orders/'+o.id+'/status',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({printed:true,status:'printed',printedAt:new Date().toISOString()})});}async function testPrint(){await printOrder({id:'TEST',createdAt:new Date().toISOString(),customer:'בדיקה',phone:'',type:'בדיקה',items:'בדיקת הדפסה Yosef Orders v1.7',notes:''})}async function load(manual=false){const j=await (await fetch('/api/orders')).json(); orders.innerHTML=j.orders.map(o=>`<div class=row><b>#${o.id} - ${o.customer||'ללא שם'}</b> <span>${o.printed?'✅ הודפס':'🆕 חדש'}</span><br>${o.phone||''}<br>${(o.items||'').replaceAll('\n','<br>')}<br><button onclick='manualPrint(${o.id})'>הדפס / הדפס שוב</button></div>`).join('')||'אין הזמנות'; for(const o of j.orders){if(!printed.has(o.id)&&!o.printed){beep.play().catch(()=>{}); try{await printOrder(o)}catch(e){status.innerHTML='<span class=bad>שגיאת הדפסה: '+e.message+'</span>'; break}}}}async function manualPrint(id){const j=await (await fetch('/api/orders')).json(); const o=j.orders.find(x=>x.id===id); await printOrder(o); load(true)}connectQZ(); setInterval(load,3000); load();</script></body></html>
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>תחנת הדפסה - יוסף הדייג</title>
+<script src="https://cdn.jsdelivr.net/npm/qz-tray@2.2.4/qz-tray.js"></script>
+<style>
+body{font-family:Arial;background:#f5fbfc;margin:0;color:#123}.head{background:#0b6f83;color:white;padding:18px;text-align:center}.wrap{max-width:900px;margin:auto;padding:16px}.card{background:white;border-radius:18px;padding:16px;margin:12px 0;box-shadow:0 4px 18px #0001}button{border:0;border-radius:12px;background:#0b8aa0;color:white;font-weight:bold;padding:12px 18px;margin:5px;font-size:16px}.bad{color:#b00020}.ok{color:#078a34}.row{border-top:1px solid #ddd;padding:12px 0;line-height:1.5}input{font-size:16px;padding:8px;border-radius:8px;border:1px solid #ccc}
+</style>
+</head>
+<body>
+<div class="head"><h1>תחנת הדפסה - יוסף הדייג v1.8</h1><div>השאר דף זה פתוח בקופה · QZ Tray חייב להיות פתוח</div></div>
+<div class="wrap">
+  <div class="card"><button id="connectBtn">חבר QZ</button><button id="refreshBtn">רענן</button><button id="testBtn">בדיקת הדפסה</button><div id="status">בודק...</div><div>מדפסת: <input id="printer" value="POS80"></div></div>
+  <div class="card"><h2>הזמנות</h2><div id="ordersBox"></div></div>
+</div>
+<audio id="beep"><source src="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA="></audio>
+<script>
+const $=(id)=>document.getElementById(id);
+let printed=new Set(JSON.parse(localStorage.getItem('printedIds')||'[]'));
+async function connectQZ(){
+  try{ if(!qz.websocket.isActive()) await qz.websocket.connect(); $('status').innerHTML='<span class="ok">QZ מחובר</span>'; return true; }
+  catch(e){ $('status').innerHTML='<span class="bad">QZ לא מחובר: '+e.message+'</span>'; return false; }
+}
+function receiptText(o){return [`יוסף הדייג`,`------------------------------`,`הזמנה #${o.id}`,new Date(o.createdAt).toLocaleString('he-IL'),`לקוח: ${o.customer||''}`,`טלפון: ${o.phone||''}`,`סוג: ${o.type||''}`,`------------------------------`,`${o.items||''}`,`------------------------------`,`הערות: ${o.notes||''}`,``,``,` `].join('\n')}
+async function printOrder(o){
+  const ok=await connectQZ(); if(!ok) throw new Error('QZ לא מחובר');
+  const cfg=qz.configs.create($('printer').value || 'POS80', { encoding:'UTF-8' });
+  await qz.print(cfg,[receiptText(o)]);
+  printed.add(o.id); localStorage.setItem('printedIds', JSON.stringify([...printed]));
+  await fetch('/api/orders/'+o.id+'/status',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({printed:true,status:'printed',printedAt:new Date().toISOString()})});
+}
+async function testPrint(){ await printOrder({id:'TEST',createdAt:new Date().toISOString(),customer:'בדיקה',phone:'',type:'בדיקה',items:'בדיקת הדפסה Yosef Orders v1.8',notes:''}); }
+async function loadOrders(){
+  const j=await (await fetch('/api/orders?ts='+Date.now())).json();
+  $('ordersBox').innerHTML=(j.orders||[]).map(o=>`<div class="row"><b>#${o.id} - ${o.customer||'ללא שם'}</b> <span>${o.printed?'✅ הודפס':'🆕 חדש'}</span><br>${o.phone||''}<br>${String(o.items||'').replaceAll('\n','<br>')}<br><button onclick="manualPrint(${o.id})">הדפס / הדפס שוב</button></div>`).join('') || 'אין הזמנות';
+  for(const o of (j.orders||[])){
+    if(!printed.has(o.id) && !o.printed){
+      $('beep').play().catch(()=>{});
+      try{ await printOrder(o); }
+      catch(e){ $('status').innerHTML='<span class="bad">שגיאת הדפסה: '+e.message+'</span>'; break; }
+    }
+  }
+}
+async function manualPrint(id){ const j=await (await fetch('/api/orders')).json(); const o=(j.orders||[]).find(x=>Number(x.id)===Number(id)); if(o) { await printOrder(o); await loadOrders(); } }
+$('connectBtn').addEventListener('click',connectQZ);
+$('refreshBtn').addEventListener('click',loadOrders);
+$('testBtn').addEventListener('click',testPrint);
+connectQZ(); loadOrders(); setInterval(loadOrders,3000);
+</script>
+</body>
+</html>
