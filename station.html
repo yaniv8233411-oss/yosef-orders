@@ -1,87 +1,87 @@
 <!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>תחנת הדפסה</title><script src="https://cdn.jsdelivr.net/npm/qz-tray@2.2.4/qz-tray.js"></script><style>
-body{margin:0;font-family:Arial;background:#eef8fb;color:#123}.hero{background:linear-gradient(135deg,#334,#126);color:#fff;text-align:center;padding:30px}h1{margin:0;font-size:36px}.wrap{max-width:900px;margin:auto;padding:20px}.box{background:#fff;border-radius:18px;padding:22px;margin:18px 0}.btn{border:0;border-radius:12px;background:#177da4;color:white;padding:14px 22px;font-size:20px;margin:5px}.status{font-size:20px;color:#933;line-height:1.5}.ok{color:green}.order{border-top:1px solid #ddd;padding:18px;font-size:20px}.big{font-size:24px;font-weight:bold}.printed{color:green}.new{color:#07f}input{font-size:18px;padding:8px}.small{font-size:15px;color:#557}</style></head><body><div class="hero"><h1>תחנת הדפסה - יוסף הדייג v2.2</h1><div>השאר דף זה פתוח בקופה · QZ Tray חייב להיות פתוח</div></div><div class="wrap"><div class="box"><button class="btn" onclick="connectQZ(true)">חבר QZ</button><button class="btn" onclick="refreshAll()">רענן</button><button class="btn" onclick="testPrint()">בדיקת הדפסה</button><button class="btn" onclick="resetLocal()">אפס הדפסות מקומיות</button><div id="status" class="status">בודק...</div><label>מדפסת: <input id="printer" value="POS80"></label><div class="small">v2.2 תיקון חיבור QZ: מזהה חיבור גם אם QZ לא מחזיר תשובה לדפדפן. אם קופץ חלון QZ לחץ Allow.</div></div><div class="box"><h2>הזמנות</h2><div id="orders">אין הזמנות</div></div></div><script>
+body{margin:0;font-family:Arial;background:#eef8fb;color:#123}.hero{background:linear-gradient(135deg,#334,#126);color:#fff;text-align:center;padding:30px}h1{margin:0;font-size:36px}.wrap{max-width:900px;margin:auto;padding:20px}.box{background:#fff;border-radius:18px;padding:22px;margin:18px 0}.btn{border:0;border-radius:12px;background:#177da4;color:white;padding:14px 22px;font-size:20px;margin:5px}.btn.danger{background:#a43}.status{font-size:20px;color:#933;line-height:1.5}.ok{color:green}.order{border-top:1px solid #ddd;padding:18px;font-size:20px}.big{font-size:24px;font-weight:bold}.printed{color:green}.new{color:#07f}.printing{color:#c78a00}input{font-size:18px;padding:8px}.small{font-size:15px;color:#557}</style></head><body><div class="hero"><h1>תחנת הדפסה - יוסף הדייג v2.3 FINAL</h1><div>הדפסה פעם אחת בלבד · השאר דף זה פתוח בקופה</div></div><div class="wrap"><div class="box"><button class="btn" onclick="connectQZ(true)">חבר QZ</button><button class="btn" onclick="refreshAll()">רענן</button><button class="btn" onclick="testPrint()">בדיקת הדפסה</button><button class="btn danger" onclick="stopAuto()">עצור הדפסה אוטומטית</button><button class="btn" onclick="startAuto()">הפעל אוטומטי</button><div id="status" class="status">בודק...</div><label>מדפסת: <input id="printer" value="POS80"></label><div class="small">v2.3 FINAL: הגנת לולאה — כל הזמנה נכנסת לנעילה לפני הדפסה, מודפסת פעם אחת, ואז מסומנת כהודפסה.</div></div><div class="box"><h2>הזמנות</h2><div id="orders">אין הזמנות</div></div></div><script>
 const API=location.origin;
 let known=JSON.parse(localStorage.yosefPrinted||'{}');
+let printing=JSON.parse(localStorage.yosefPrinting||'{}');
 let connecting=false;
-let lastConnectAttempt=0;
+let autoEnabled=localStorage.yosefAutoPrint!=='off';
+let autoBusy=false;
 
-// unsigned / anonymous QZ mode - no broken certificate, no signature
 try{
-  qz.security.setCertificatePromise(function(resolve,reject){ resolve(null); });
-  qz.security.setSignaturePromise(function(toSign){ return function(resolve,reject){ resolve(null); }; });
+  qz.security.setCertificatePromise((resolve,reject)=>resolve(null));
+  qz.security.setSignaturePromise(toSign => (resolve,reject)=>resolve(null));
 }catch(e){ console.log('security setup skipped', e); }
 
-function setStatus(t, good=false){
-  const el=document.getElementById('status');
-  el.className='status '+(good?'ok':'');
-  el.innerHTML=t;
-  console.log('STATUS:', t);
-}
+function setStatus(t, good=false){ const el=document.getElementById('status'); el.className='status '+(good?'ok':''); el.innerHTML=t; console.log('STATUS:', t); }
 function qzActive(){ try{return qz.websocket && qz.websocket.isActive();}catch(e){return false;} }
-function monitorQZ(){ if(qzActive()) setStatus('QZ מחובר ✅ · מדפסת: '+(printer.value||'POS80'), true); }
-setInterval(monitorQZ,1200);
+function saveLocal(){ localStorage.yosefPrinted=JSON.stringify(known); localStorage.yosefPrinting=JSON.stringify(printing); }
+function esc(s){return String(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+function monitorQZ(){ if(qzActive()) setStatus('QZ מחובר ✅ · מדפסת: '+(printer.value||'POS80')+' · אוטומטי: '+(autoEnabled?'פעיל':'כבוי'), true); }
+setInterval(monitorQZ,1500);
 
 async function connectQZ(manual=false){
   if(qzActive()){ setStatus('QZ מחובר ✅ · מדפסת: '+(printer.value||'POS80'), true); return true; }
   if(connecting){ setStatus('ממתין לאישור QZ... אם קופץ חלון, לחץ Allow'); return false; }
-  connecting=true; lastConnectAttempt=Date.now();
-  setStatus('מתחבר ל-QZ... אם קופץ חלון, לחץ Allow');
+  connecting=true; setStatus('מתחבר ל-QZ... אם קופץ חלון, לחץ Allow');
   try{
-    const connectPromise=qz.websocket.connect({retries:1, delay:1});
-    const timeout=new Promise((resolve)=>setTimeout(resolve,4500,'timeout'));
-    const result=await Promise.race([connectPromise.then(()=> 'ok').catch(e=>{throw e}), timeout]);
+    const result=await Promise.race([
+      qz.websocket.connect({retries:1,delay:1}).then(()=> 'ok'),
+      new Promise(resolve=>setTimeout(()=>resolve('timeout'),4500))
+    ]);
     connecting=false;
-    if(result==='timeout'){
-      if(qzActive()){ setStatus('QZ מחובר ✅ · מדפסת: '+(printer.value||'POS80'), true); return true; }
-      setStatus('QZ עדיין ממתין. לחץ Allow בחלון של QZ ואז לחץ שוב חבר QZ.'); return false;
-    }
+    if(result==='timeout' && !qzActive()){ setStatus('QZ ממתין לאישור. לחץ Allow ואז חבר QZ שוב.'); return false; }
     setStatus('QZ מחובר ✅ · מדפסת: '+(printer.value||'POS80'), true); return true;
   }catch(e){
     connecting=false;
-    const msg=(e && (e.message||e.toString())) || e;
     if(qzActive()){ setStatus('QZ מחובר ✅ · מדפסת: '+(printer.value||'POS80'), true); return true; }
-    setStatus('QZ לא מחובר: '+msg+'<br>אם QZ פתוח, לחץ Advanced והורד Block anonymous requests.');
-    return false;
+    setStatus('QZ לא מחובר: '+((e&&(e.message||e.toString()))||e)); return false;
   }
 }
-
-async function ensureQZ(){
-  if(qzActive()) return true;
-  return await connectQZ(false);
-}
-function esc(s){return String(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+async function ensureQZ(){ return qzActive() || await connectQZ(false); }
+async function getConfig(){ if(!await ensureQZ()) throw new Error('QZ לא מחובר'); return qz.configs.create(printer.value||'POS80',{encoding:'UTF-8'}); }
 function htmlReceipt(o){return `<!doctype html><html dir="rtl"><body style="font-family:Arial;width:270px;text-align:right;font-size:18px"><center><h2>יוסף הדייג</h2><div>יותר טרי מזה עוד שוחה בים</div></center><hr><h2>הזמנה #${esc(o.id)}</h2><div>${new Date(o.createdAt||Date.now()).toLocaleString('he-IL')}</div><p>לקוח: ${esc(o.customer)}<br>טלפון: ${esc(o.phone)}<br>סוג: ${esc(o.type)}</p><hr><div style="white-space:pre-wrap;font-size:20px">${esc(o.items)}</div><hr><div style="white-space:pre-wrap">הערות: ${esc(o.notes)}</div><br><center>יוסף הדייג · עמק רפאים 42</center></body></html>`}
-async function getConfig(){
-  const ok=await ensureQZ();
-  if(!ok) throw new Error('QZ לא מחובר');
-  return qz.configs.create(printer.value||'POS80',{encoding:'UTF-8'});
+
+async function setServerStatus(o, status, printed){
+  if(!o || o.id==='TEST') return;
+  try{ await fetch(API+'/api/orders/'+o.id+'/status',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status,printed})}); }catch(e){ console.log('status update failed', e); }
 }
-async function printOrder(o){
-  setStatus('מדפיס הזמנה #'+o.id+'...');
-  const c=await getConfig();
-  const data=[{type:'pixel',format:'html',flavor:'plain',data:htmlReceipt(o)}];
-  await qz.print(c,data);
-  known[o.id]=true; localStorage.yosefPrinted=JSON.stringify(known);
-  if(o.id!=='TEST') await fetch(API+'/api/orders/'+o.id+'/status',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:'printed',printed:true})});
-  setStatus('הודפס ✅ הזמנה #'+o.id, true);
-  await load();
-}
-async function testPrint(){
-  try{ await printOrder({id:'TEST',createdAt:new Date().toISOString(),customer:'בדיקה',phone:'',type:'בדיקה',items:'בדיקת הדפסה v2.2',notes:'אם זה יצא - החיבור עובד'}); }
-  catch(e){ setStatus('שגיאת בדיקת הדפסה: '+(e.message||e)); }
-}
-async function load(){
+async function printOrder(o, manual=false){
+  if(!o) return;
+  if(o.id!=='TEST'){
+    if(!manual && (o.printed || known[o.id] || printing[o.id])){ console.log('skip duplicate', o.id); return; }
+    printing[o.id]=Date.now(); saveLocal();
+    await setServerStatus(o,'printing',false); // lock before sending to printer - prevents endless loops
+  }
   try{
-    let r=await fetch(API+'/api/orders?ts='+Date.now()); let a=await r.json();
-    orders.innerHTML=a.map(o=>`<div class="order"><div class="big ${o.printed?'printed':'new'}">${o.printed?'✅':'🆕'} #${o.id} - ${esc(o.customer)}</div><div>${esc(o.phone)}</div><div>${esc(o.items).replace(/\n/g,'<br>')}</div><button class="btn" onclick='printOrder(${JSON.stringify(o).replace(/'/g,"&#39;")})'>הדפס / הדפס שוב</button></div>`).join('')||'אין הזמנות';
-    for(const o of a){ if(!o.printed&&!known[o.id]&&qzActive()){ try{ await printOrder(o); }catch(e){ setStatus('שגיאת הדפסה אוטומטית: '+(e.message||e)); break; } } }
+    setStatus('מדפיס הזמנה #'+o.id+'...');
+    const c=await getConfig();
+    await qz.print(c,[{type:'pixel',format:'html',flavor:'plain',data:htmlReceipt(o)}]);
+    if(o.id!=='TEST'){
+      delete printing[o.id]; known[o.id]=true; saveLocal();
+      await setServerStatus(o,'printed',true);
+    }
+    setStatus('הודפס ✅ הזמנה #'+o.id, true);
+  }catch(e){
+    if(o.id!=='TEST'){
+      delete printing[o.id]; saveLocal();
+      await setServerStatus(o,'new',false); // release lock if failed
+    }
+    throw e;
+  }finally{ await load(false); }
+}
+async function testPrint(){ try{ await printOrder({id:'TEST',createdAt:new Date().toISOString(),customer:'בדיקה',phone:'',type:'בדיקה',items:'בדיקת הדפסה v2.3 FINAL',notes:'אם זה יצא - החיבור עובד'}, true); }catch(e){ setStatus('שגיאת בדיקת הדפסה: '+(e.message||e)); } }
+async function load(doAuto=true){
+  try{
+    const r=await fetch(API+'/api/orders?ts='+Date.now()); const a=await r.json();
+    orders.innerHTML=a.map(o=>`<div class="order"><div class="big ${o.printed?'printed':(o.status==='printing'?'printing':'new')}">${o.printed?'✅':(o.status==='printing'?'⏳':'🆕')} #${o.id} - ${esc(o.customer)}</div><div>${esc(o.phone)}</div><div>${esc(o.items).replace(/\n/g,'<br>')}</div><div>סטטוס: ${esc(o.status||'new')}</div><button class="btn" onclick='printOrder(${JSON.stringify(o).replace(/'/g,"&#39;")}, true)'>הדפס / הדפס שוב</button></div>`).join('')||'אין הזמנות';
+    if(doAuto && autoEnabled && !autoBusy && qzActive()){
+      const next=a.find(o=>!o.printed && (o.status||'new')==='new' && !known[o.id] && !printing[o.id]);
+      if(next){ autoBusy=true; try{ await printOrder(next,false); }catch(e){ setStatus('שגיאת הדפסה אוטומטית: '+(e.message||e)); } finally{ autoBusy=false; } }
+    }
   }catch(e){ setStatus('שגיאת טעינת הזמנות: '+(e.message||e)); }
 }
-function resetLocal(){ known={}; localStorage.yosefPrinted='{}'; setStatus('הדפסות מקומיות אופסו'); load(); }
-function refreshAll(){ if(qzActive()) setStatus('QZ מחובר ✅ · מדפסת: '+(printer.value||'POS80'), true); else connectQZ(false); load(); }
-
-// start gently - don't block page if QZ prompt waits
-load();
-setTimeout(()=>connectQZ(false),600);
-setInterval(load,4000);
+function refreshAll(){ if(qzActive()) setStatus('QZ מחובר ✅ · מדפסת: '+(printer.value||'POS80'), true); else connectQZ(false); load(true); }
+function stopAuto(){ autoEnabled=false; localStorage.yosefAutoPrint='off'; setStatus('הדפסה אוטומטית נעצרה ⛔'); }
+function startAuto(){ autoEnabled=true; localStorage.yosefAutoPrint='on'; setStatus('הדפסה אוטומטית פעילה ✅', true); load(true); }
+load(false); setTimeout(()=>connectQZ(false),600); setInterval(()=>load(true),5000);
 </script></body></html>
