@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
 const app = express();
 const PORT = process.env.PORT || 10000;
@@ -23,7 +24,25 @@ app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 app.get('/station', (req, res) => res.redirect('/station.html'));
 app.get('/station.html', (req, res) => res.sendFile(path.join(__dirname, 'station.html')));
 
-app.get('/api/health', (req, res) => res.json({ ok: true, version: 'v1.9', time: new Date().toISOString() }));
+app.get('/api/health', (req, res) => res.json({ ok: true, version: 'v2.0', time: new Date().toISOString() }));
+
+app.get('/api/qz/cert', (req, res) => {
+  res.type('text/plain').send(fs.readFileSync(path.join(__dirname, 'qz-cert.pem'), 'utf8'));
+});
+
+app.post('/api/qz/sign', (req, res) => {
+  try {
+    const toSign = req.body.request || req.body.toSign || '';
+    const key = fs.readFileSync(path.join(__dirname, 'qz-private-key.pem'), 'utf8');
+    const signer = crypto.createSign('RSA-SHA512');
+    signer.update(toSign);
+    signer.end();
+    res.type('text/plain').send(signer.sign(key, 'base64'));
+  } catch (e) {
+    console.error('QZ_SIGN_ERROR', e.message);
+    res.status(500).type('text/plain').send('sign error');
+  }
+});
 app.get('/api/orders', (req, res) => res.json({ ok: true, orders: loadOrders() }));
 
 app.post('/api/orders', (req, res) => {
@@ -57,4 +76,4 @@ app.post('/api/orders/:id/status', (req, res) => {
   res.json({ ok: true, order });
 });
 
-app.listen(PORT, () => console.log(`Yosef Orders v1.9 server running on port ${PORT}`));
+app.listen(PORT, () => console.log(`Yosef Orders v2.0 server running on port ${PORT}`));

@@ -9,14 +9,32 @@ body{font-family:Arial;background:#f5fbfc;margin:0;color:#123}.head{background:#
 </style>
 </head>
 <body>
-<div class="head"><h1>תחנת הדפסה - יוסף הדייג v1.9</h1><div>השאר דף זה פתוח בקופה · QZ Tray חייב להיות פתוח</div></div>
+<div class="head"><h1>תחנת הדפסה - יוסף הדייג v2.0</h1><div>השאר דף זה פתוח בקופה · QZ Tray חייב להיות פתוח</div></div>
 <div class="wrap">
-  <div class="card"><button id="connectBtn">חבר QZ</button><button id="refreshBtn">רענן</button><button id="testBtn">בדיקת הדפסה</button><button id="resetBtn">אפס הדפסות מקומיות</button><div id="status">בודק...</div><div>מדפסת: <input id="printer" value="POS80"></div><div class="muted">v1.9 מדפיס עברית כ-HTML דרך דרייבר המדפסת כדי למנוע ג׳יבריש.</div></div>
+  <div class="card"><button id="connectBtn">חבר QZ</button><button id="refreshBtn">רענן</button><button id="testBtn">בדיקת הדפסה</button><button id="resetBtn">אפס הדפסות מקומיות</button><div id="status">בודק...</div><div>מדפסת: <input id="printer" value="POS80"></div><div class="muted">v2.0 כולל חתימת QZ מאובטחת + עברית תקינה. אם QZ שואל פעם אחת, סמן Remember ואז Allow.</div></div>
   <div class="card"><h2>הזמנות</h2><div id="ordersBox"></div></div>
 </div>
 <script>
 const $=(id)=>document.getElementById(id);
-let printed=new Set(JSON.parse(localStorage.getItem('printedIds_v19')||'[]'));
+let printed=new Set(JSON.parse(localStorage.getItem('printedIds_v20')||'[]'));
+
+// QZ signed security - Yosef Orders v2.0
+qz.security.setCertificatePromise(function(resolve, reject) {
+  fetch('/api/qz/cert?ts=' + Date.now(), {cache:'no-store'})
+    .then(r => r.text())
+    .then(resolve)
+    .catch(reject);
+});
+qz.security.setSignatureAlgorithm('SHA512');
+qz.security.setSignaturePromise(function(toSign) {
+  return function(resolve, reject) {
+    fetch('/api/qz/sign', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({request: toSign})
+    }).then(r => r.text()).then(resolve).catch(reject);
+  };
+});
 function esc(s){return String(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m])).replace(/\n/g,'<br>')}
 function beep(){ try{ const ac=new (window.AudioContext||window.webkitAudioContext)(); const o=ac.createOscillator(); const g=ac.createGain(); o.frequency.value=880; o.connect(g); g.connect(ac.destination); g.gain.setValueAtTime(0.15,ac.currentTime); o.start(); setTimeout(()=>{o.stop(); ac.close();},350); }catch(e){} }
 async function connectQZ(){
@@ -53,7 +71,7 @@ async function sendToPrinter(o){
 async function printOrder(o){
   const ok=await connectQZ(); if(!ok) throw new Error('QZ לא מחובר');
   await sendToPrinter(o);
-  printed.add(Number(o.id)); localStorage.setItem('printedIds_v19', JSON.stringify([...printed]));
+  printed.add(Number(o.id)); localStorage.setItem('printedIds_v20', JSON.stringify([...printed]));
   await fetch('/api/orders/'+o.id+'/status',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({printed:true,status:'printed',printedAt:new Date().toISOString()})});
   $('status').innerHTML='<span class="ok">הודפסה הזמנה #'+esc(o.id)+'</span>';
 }
@@ -74,7 +92,7 @@ async function manualPrint(id){ const j=await (await fetch('/api/orders?ts='+Dat
 $('connectBtn').addEventListener('click',connectQZ);
 $('refreshBtn').addEventListener('click',loadOrders);
 $('testBtn').addEventListener('click',testPrint);
-$('resetBtn').addEventListener('click',()=>{localStorage.removeItem('printedIds_v19'); printed=new Set(); loadOrders();});
+$('resetBtn').addEventListener('click',()=>{localStorage.removeItem('printedIds_v20'); printed=new Set(); loadOrders();});
 connectQZ(); loadOrders(); setInterval(loadOrders,3000);
 </script>
 </body>
